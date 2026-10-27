@@ -1,0 +1,124 @@
+# Copy to .github/workflows/pages.yml for a static frontend on GitHub Pages.
+#
+# Static only: plain HTML, Vite, Astro static, or a Next.js static export.
+# Next.js SSR, API routes and server actions need a Node host (Vercel, Netlify, Fly, a server).
+#
+# In the repository: Settings -> Pages -> Source: GitHub Actions.
+# For a project page at https://<user>.github.io/<repo>/ set the framework base path:
+#   Vite:   base: '/<repo>/'
+#   Astro:  base: '/<repo>/'
+#   Next:   basePath: '/<repo>', assetPrefix: '/<repo>/'
+# A custom domain served from the root uses '/' instead.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build static site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version
+        id: node
+        run: |
+          if [ -f .nvmrc ]; then
+            echo "version=$(tr -d '[:space:]' < .nvmrc)" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=22" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "name=pnpm" >> "$GITHUB_OUTPUT"
+            echo "cache=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+            echo "run=pnpm run" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "name=yarn" >> "$GITHUB_OUTPUT"
+            echo "cache=yarn" >> "$GITHUB_OUTPUT"
+            echo "install=yarn install --immutable" >> "$GITHUB_OUTPUT"
+            echo "run=yarn run" >> "$GITHUB_OUTPUT"
+          elif [ -f bun.lock ] || [ -f bun.lockb ]; then
+            echo "name=bun" >> "$GITHUB_OUTPUT"
+            # actions/setup-node does not cache bun; setup-bun below handles the runtime.
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "install=bun install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+            echo "run=bun run" >> "$GITHUB_OUTPUT"
+          elif [ -f package-lock.json ]; then
+            echo "name=npm" >> "$GITHUB_OUTPUT"
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+            echo "install=npm ci" >> "$GITHUB_OUTPUT"
+            echo "run=npm run" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lockfile found. Commit package-lock.json, pnpm-lock.yaml, yarn.lock or bun.lock." >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: ${{ steps.pm.outputs.cache }}
+
+      - name: Enable corepack
+        if: steps.pm.outputs.name == 'pnpm' || steps.pm.outputs.name == 'yarn'
+        run: corepack enable
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.pm.outputs.name == 'bun'
+
+      - name: Install
+        run: |
+          if [ "${{ steps.pm.outputs.name }}" = "yarn" ] && yarn --version | grep -q '^1\.'; then
+            yarn install --frozen-lockfile
+          else
+            ${{ steps.pm.outputs.install }}
+          fi
+
+      # Plain HTML has no build. Delete this step for a static file tree served from the root.
+      - name: Build
+        run: ${{ steps.pm.outputs.run }} build
+
+      # GitHub Pages serves 404.html for unknown paths. For a client-side router, serve the
+      # same shell so deep links work. Change dist/ if the framework outputs elsewhere (out, build).
+      - name: SPA fallback
+        run: |
+          if [ -d dist ]; then
+            if [ ! -f dist/404.html ] && [ -f dist/index.html ]; then
+              cp dist/index.html dist/404.html
+            fi
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # Change to out/, build/ or . for another output directory or plain HTML.
+          path: dist
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -7,6 +7,9 @@
 //   - the project → theme tables in SKILL.md, themes.md and README.md only name themes that exist
 //   - relative links in the markdown files point at files that exist
 //   - CHANGELOG.md has an entry for metadata.version
+//   - the delivery references, workflow templates and verification script are present
+//   - verify.sh is executable and parses under `sh -n`
+//   - the workflow templates parse as YAML (system Ruby; skipped with a warning when unavailable)
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -113,7 +116,7 @@ const readme = read('README.md');
 checkTable('README.md', readme, '| Theme | Picked for | Character |', 1);
 
 // ---------- relative links
-for (const file of ['README.md', 'create-frontend/SKILL.md', 'create-frontend/references/themes.md', 'CHANGELOG.md']) {
+for (const file of ['README.md', 'create-frontend/SKILL.md', 'create-frontend/references/themes.md', 'create-frontend/references/accessibility.md', 'create-frontend/references/github-delivery.md', 'create-frontend/references/observability.md', 'create-frontend/references/quality-gates.md', 'create-frontend/references/security-headers.md', 'create-frontend/references/motion.md', 'create-frontend/references/design-directions.md', 'CHANGELOG.md']) {
   const text = read(file);
   const linkRe = /\]\(([^)\s#]+)(#[^)]*)?\)/g;
   let l;
@@ -125,9 +128,80 @@ for (const file of ['README.md', 'create-frontend/SKILL.md', 'create-frontend/re
   }
 }
 
+// ---------- delivery files
+const required = [
+  'create-frontend/references/github-delivery.md',
+  'create-frontend/references/security-headers.md',
+  'create-frontend/references/observability.md',
+  'create-frontend/references/accessibility.md',
+  'create-frontend/references/quality-gates.md',
+  'create-frontend/assets/github/ci.yml',
+  'create-frontend/assets/github/pages.yml',
+  'create-frontend/scripts/verify.sh',
+];
+for (const file of required) {
+  const full = path.join(root, file);
+  if (!fs.existsSync(full)) { fail(`${file}: required file is missing`); continue; }
+  if (fs.statSync(full).size < 200) fail(`${file}: file is suspiciously short`);
+  if (file.endsWith('.md')) {
+    const text = fs.readFileSync(full, 'utf8');
+    if (!/^# .+/m.test(text)) fail(`${file}: no level-one heading`);
+    if (!/SKILL\.md/.test(text)) fail(`${file}: does not refer back to SKILL.md`);
+  }
+}
+
+const verify = path.join(skillDir, 'scripts', 'verify.sh');
+if (fs.existsSync(verify)) {
+  if (!(fs.statSync(verify).mode & 0o111)) fail('create-frontend/scripts/verify.sh: not executable (chmod +x)');
+  try { execFileSync('sh', ['-n', verify], { encoding: 'utf8' }); }
+  catch (e) { fail(`create-frontend/scripts/verify.sh: sh -n failed: ${String(e.stderr || e.message).trim()}`); }
+}
+
+// The workflows are copied into generated projects; a YAML syntax error is a broken template.
+const workflows = ['create-frontend/assets/github/ci.yml', 'create-frontend/assets/github/pages.yml'];
+let ruby = true;
+try { execFileSync('ruby', ['-e', 'exit 0'], { stdio: 'ignore' }); }
+catch { ruby = false; }
+for (const file of workflows) {
+  if (!fs.existsSync(path.join(root, file))) continue;
+  const text = fs.readFileSync(path.join(root, file), 'utf8');
+  for (const key of ['name:', 'on:', 'jobs:']) {
+    if (!new RegExp(`^${key}`, 'm').test(text)) fail(`${file}: missing top-level "${key}"`);
+  }
+  if (ruby) {
+    try { execFileSync('ruby', ['-ryaml', '-e', 'YAML.load_file(ARGV[0])', path.join(root, file)], { encoding: 'utf8', stdio: 'pipe' }); }
+    catch (e) { fail(`${file}: YAML parse failed: ${String(e.stderr || e.message).trim()}`); }
+  } else if (process.env.CI) {
+    fail(`${file}: cannot parse YAML; Ruby is required in CI`);
+  }
+}
+
+// ---------- the skill promises delivery in the workflow itself
+for (const [label, needle] of [
+  ['eight verification categories', 'Eight categories.'],
+  ['WCAG 2.2', 'WCAG 2.2'],
+  ['delivery reference', 'references/github-delivery.md'],
+  ['security headers reference', 'references/security-headers.md'],
+  ['observability reference', 'references/observability.md'],
+  ['quality gates reference', 'references/quality-gates.md'],
+  ['verify script', 'scripts/verify.sh'],
+]) {
+  if (!skill.includes(needle)) fail(`SKILL.md: missing ${label} ("${needle}")`);
+}
+
+// README must not claim an older version than the frontmatter.
+const readmeVersion = /\*\*Version:\*\*\s*([0-9]+\.[0-9]+\.[0-9]+)/.exec(readme);
+if (!readmeVersion) fail('README.md: no "**Version:** x.y.z" line');
+else if (version && readmeVersion[1] !== version) fail(`README.md: version ${readmeVersion[1]} does not match metadata.version ${version}`);
+
 // ---------- changelog has the version
 if (version && !read('CHANGELOG.md').includes(`## ${version} `)) fail(`CHANGELOG.md: no "## ${version}" entry for metadata.version`);
 
 // ---------- result
 if (errors.length) { console.error(errors.map(e => ` ✗ ${e}`).join('\n')); process.exit(1); }
-console.log(` ✓ frontmatter ok (name ${name}, version ${version}, description ${description.length} chars)\n ✓ ${slugs.length} themes pass check-contrast.js in both modes\n ✓ SKILL.md appendix matches the reference\n ✓ theme tables and relative links resolve`);
+console.log(` ✓ frontmatter ok (name ${name}, version ${version}, description ${description.length} chars)`);
+console.log(` ✓ ${slugs.length} themes pass check-contrast.js in both modes`);
+console.log(' ✓ SKILL.md appendix matches the reference');
+console.log(' ✓ theme tables and relative links resolve');
+console.log(' ✓ delivery references, workflow templates and verify.sh present');
+console.log(` ✓ verify.sh executable and sh -n clean${ruby ? ', workflow YAML parses' : ' (Ruby not found; YAML parse skipped)'}`);

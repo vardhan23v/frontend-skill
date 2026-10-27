@@ -18,11 +18,13 @@ jobs:
         node: [18, 22]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Frontmatter, themes, appendix sync, tables, links
+      - name: Frontmatter, themes, appendix sync, tables, links, delivery files
         run: node .github/scripts/validate-skill.js
 
       - name: Contrast checker accepts a light-only file and rejects a failing pair
@@ -50,7 +52,31 @@ jobs:
           for f in create-frontend/scripts/*.sh; do sh -n "$f"; done
           test -x create-frontend/scripts/install.sh
           test -x create-frontend/scripts/scaffold.sh
+          test -x create-frontend/scripts/verify.sh
           test -x create-frontend/scripts/check-contrast.js
+
+      - name: verify.sh reports defined checks and fails honestly
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/verify-project"
+          mkdir -p "$dir"
+          cat > "$dir/package.json" <<'EOF'
+          {
+            "name": "verify-fixture",
+            "private": true,
+            "scripts": {
+              "lint": "node -e \"console.log('lint ok')\"",
+              "test": "node -e \"process.exit(1)\""
+            }
+          }
+          EOF
+          if sh create-frontend/scripts/verify.sh "$dir" > "$RUNNER_TEMP/verify.log" 2>&1; then
+            echo "verify.sh exited 0 with a failing test script" >&2; cat "$RUNNER_TEMP/verify.log" >&2; exit 1
+          fi
+          grep -q 'Lint: pass' "$RUNNER_TEMP/verify.log"
+          grep -q 'Tests: FAIL' "$RUNNER_TEMP/verify.log"
+          grep -q 'Build: not defined' "$RUNNER_TEMP/verify.log"
+          grep -q 'Result: FAIL' "$RUNNER_TEMP/verify.log"
 
       - name: scaffold.sh html
         run: |
@@ -91,3 +117,27 @@ jobs:
             echo "install.sh ran from an installed copy and did not refuse" >&2; exit 1
           fi
           test -f "$HOME/.claude/skills/create-frontend/SKILL.md"
+
+  identity:
+    name: commit identity
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: No bot author or co-author trailer in this branch
+        run: |
+          set -eu
+          base='${{ github.event.pull_request.base.sha }}'
+          if git log --format='%an <%ae>' "$base..HEAD" | grep -Eiq '(noreply@anthropic\.com|\[bot\]|github-actions|claude)'; then
+            echo "A commit in this pull request is authored by a bot:" >&2
+            git log --format='%h %an <%ae>' "$base..HEAD" >&2
+            exit 1
+          fi
+          if git log --format='%B' "$base..HEAD" | grep -Eiq '^co-authored-by:.*(bot|claude|anthropic|agent)'; then
+            echo "A commit in this pull request has a bot Co-Authored-By trailer:" >&2
+            git log --format='%h%n%B' "$base..HEAD" >&2
+            exit 1
+          fi
