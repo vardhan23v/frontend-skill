@@ -1,10 +1,10 @@
-# create-frontend-skill
+# frontend-skill
 
-[![CI](https://github.com/vardhan23v/create-frontend-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/vardhan23v/create-frontend-skill/actions/workflows/ci.yml) [![Scaffold drift](https://github.com/vardhan23v/create-frontend-skill/actions/workflows/scaffold-drift.yml/badge.svg)](https://github.com/vardhan23v/create-frontend-skill/actions/workflows/scaffold-drift.yml)
+[![CI](https://github.com/vardhan23v/frontend-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/vardhan23v/frontend-skill/actions/workflows/ci.yml) [![Scaffold drift](https://github.com/vardhan23v/frontend-skill/actions/workflows/scaffold-drift.yml/badge.svg)](https://github.com/vardhan23v/frontend-skill/actions/workflows/scaffold-drift.yml)
 
-An open-source [Agent Skill](https://agentskills.io) (`create-frontend`) for Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode and any other agent that reads `SKILL.md`. It turns "build me a frontend" into a production-oriented workflow: classify the project, respect or choose the stack, draw the frontend/backend boundary, pick a contrast-checked colour theme, build with real states and accessibility, verify in seven explicit categories, and finish with an honest verification report.
+An open-source [Agent Skill](https://agentskills.io) (`create-frontend`) for Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode and any other agent that reads `SKILL.md`. It turns "build me a frontend" into a production-oriented workflow: classify the project, respect or choose the stack, draw the frontend/backend boundary, pick a contrast-checked colour theme, build with real states and accessibility, verify in eight explicit categories, ship to GitHub with the user's identity and CI, and finish with an honest verification report.
 
-**Version:** 3.3.0 · **Licence:** MIT · **Status:** specification complete, not yet validated on real projects (see [Validation Status](#validation-status))
+**Version:** 4.0.0 · **Licence:** MIT · **Status:** specification complete, not yet validated on a large set of real projects (see [Validation Status](#validation-status))
 
 ---
 
@@ -17,8 +17,12 @@ An open-source [Agent Skill](https://agentskills.io) (`create-frontend`) for Cla
 - [Workflow](#workflow)
 - [Stack decisions](#stack-decisions)
 - [Colour themes](#colour-themes)
-- [Motion](#motion)
 - [A new design every time](#a-new-design-every-time)
+- [Motion](#motion)
+- [Delivery and GitHub](#delivery-and-github)
+- [Security headers](#security-headers)
+- [Observability and consent](#observability-and-consent)
+- [Quality gates](#quality-gates)
 - [When backend work is required](#when-backend-work-is-required)
 - [Testing expectations](#testing-expectations)
 - [Verification levels](#verification-levels)
@@ -42,11 +46,12 @@ An open-source [Agent Skill](https://agentskills.io) (`create-frontend`) for Cla
 | Read | Inspects `package.json`, lockfile, config, routing, styling, components, data layer, tests and environment; runs the existing checks once and records what already fails |
 | Decide | Chooses the stack by a fixed priority (user → existing architecture → conventions → team constraints → requirements → defaults) |
 | Boundary | Detects features that need a backend, writes the API contract, and refuses to fake them |
-| Build | A named colour theme (from the library, or derived from the brand) and design tokens first, then screens with loading/empty/error/success states, responsive layout, accessibility, forms, security |
-| Verify | Code, types, build, tests, browser, visual, accessibility, each reported separately and never fabricated |
+| Build | A named colour theme (from the library, or derived from the brand) and design tokens first, then screens with loading/empty/error/success states, responsive layout, accessibility, forms, security, headers, observability and consent |
+| Verify | Code, types, build, tests, browser, visual, accessibility and delivery, each reported separately and never fabricated |
 | Recover | Diagnose → root cause → fix → re-verify, with a retry limit and explicit blocker handling |
-| Deploy prep | Build command, output directory, SPA fallback, env variables (public vs private), Node version, risks; deploys only on request |
-| Report | A fixed-format verification report at the end of every run |
+| Deliver | Branch → commit as the user → PR → CI → preview or GitHub Pages, with no bot author and no force-push; deploys only on request |
+| Deploy prep | Build command, output directory, SPA fallback, env variables (public vs private), Node version, security headers, risks; deploys only on request |
+| Report | A fixed-format verification report at the end of every run, including GIT and DELIVERY |
 
 ## Supported project types
 
@@ -73,8 +78,16 @@ create-frontend/
   references/themes.md        eleven colour themes with light and dark tokens, fonts, shape and wiring
   references/motion.md        motion tokens, three motion levels and twelve paste-ready animation recipes
   references/design-directions.md  ten design axes, theme alternates and remix rules, the docs/design.md template
+  references/github-delivery.md   identity, branch/PR/CI/Pages, the report fields and the failure table
+  references/security-headers.md  CSP, HSTS, host snippets, SRI and the verification commands
+  references/observability.md     error reporting, Web Vitals, event plans, consent and privacy
+  references/accessibility.md     WCAG 2.2 AA, component checks and the manual keyboard walk
+  references/quality-gates.md     Lighthouse CI, bundle budgets, visual regression and axe in CI
+  assets/github/ci.yml        generated-project CI for npm, pnpm, yarn and bun
+  assets/github/pages.yml     static GitHub Pages deploy with base-path and SPA fallback notes
   scripts/design-direction.js  composes three distinct design directions per project, seeded by its name
   scripts/check-contrast.js   WCAG contrast checker for a token file (Node 18+, no dependencies)
+  scripts/verify.sh           runs the project's own checks and prints the eight-category summary
   scripts/scaffold.sh         non-interactive scaffolds for Vite+React, Next.js, Astro, Vue, Svelte, plain HTML
   scripts/install.sh          installs or updates the skill for your agent(s)
 ```
@@ -82,11 +95,11 @@ create-frontend/
 Clone once, then install for the agent(s) you use. The installer symlinks the folder by default, so `git pull` in the clone updates every install; pass `--copy` if your agent cannot follow symlinks. Re-running the installer replaces a copied install (the old copy is moved aside as `create-frontend.bak.<timestamp>`), so keep customisations in the clone, not in the copy. Run it from the clone, never from inside a skills directory.
 
 ```bash
-git clone https://github.com/vardhan23v/create-frontend-skill.git
+git clone https://github.com/vardhan23v/frontend-skill.git
 ```
 
 ```bash
-create-frontend-skill/create-frontend/scripts/install.sh agents claude
+frontend-skill/create-frontend/scripts/install.sh agents claude
 ```
 
 | Agent | User-level directory | Project-level directory |
@@ -141,7 +154,7 @@ Giving these up front reduces questions: purpose and users, pages, where data co
 | 9 | Tests | New project, new feature |
 | 10 | Verify | Always (subset for small changes) |
 | 11 | Failure recovery | Whenever something fails |
-| 12 | Prepare for deploy | New project |
+| 12 | Prepare for delivery and deploy | New project, or whenever Git, CI or a deployment is requested |
 | 13 | Verification report | Always |
 
 Requirements (step 2) are inferred where safe; the skill asks one short batch of questions only for items that materially change the implementation (unclear users, scope that could double, login with no provider, legacy browsers, unclear public/private, brand with no reference, a host that forces a framework).
@@ -161,6 +174,9 @@ Priority, highest first: explicit user requirements → existing project archite
 | Data fetching | `fetch` in a typed module | Caching/refetching → TanStack Query or loaders |
 | Forms | Native + built-in validation | Multi-step or many fields → React Hook Form + Zod |
 | Testing | Vitest + Testing Library; Playwright e2e | Plain HTML → Playwright smoke only |
+| CI | GitHub Actions from `assets/github/ci.yml` | The host or team uses another runner |
+| Error tracking | None; an adapter with a no-op | The user names Sentry, GlitchTip or another provider |
+| Analytics and consent | None; consent-gated when requested | A legal or contractual standard applies |
 | Build tooling | The framework's own | — |
 
 ## Colour themes
@@ -226,6 +242,51 @@ Step 7 used to say only what motion may do; now it ships the motion the way it s
 
 The level is named in the plan and in the report's `Motion:` line, and step 10 checks reduced motion in the browser rather than assuming it.
 
+## Delivery and GitHub
+
+A frontend is not finished at the local build. Step 12 adds delivery without turning the skill into a deploy bot:
+
+| Rule | Behaviour |
+|---|---|
+| Identity | The commit author and committer are the user. Never a bot, never `github-actions[bot]`, never a `Co-Authored-By` agent trailer. No global Git config changes. |
+| Branch and PR | `feat/`, `fix/`, `refactor/`, `chore/` or `docs/` branch, a reviewable commit, a PR body with all eight verification categories. No merge unless asked. |
+| CI | [`assets/github/ci.yml`](create-frontend/assets/github/ci.yml) detects npm, pnpm, yarn or bun, runs only the scripts the project defines, and uploads Playwright artifacts. [`scripts/verify.sh`](create-frontend/scripts/verify.sh) runs the same checks locally. |
+| GitHub Pages | [`assets/github/pages.yml`](create-frontend/assets/github/pages.yml) deploys static output with a `404.html` fallback and base-path notes. Next.js SSR and API routes need a Node host. |
+| Safety | No force-push to a shared branch, no direct push to `main`, no disabled checks. A red CI is fixed, not hidden. |
+| Report | `GIT` (branch, commit, PR, CI, preview, deployed) and `DELIVERY` (headers, consent, error reporting, privacy) lines. Unrun checks say `not run` and give the command. |
+
+[`references/github-delivery.md`](create-frontend/references/github-delivery.md) has the exact commands, the PR template, the Pages rules and the failure table.
+
+## Security headers
+
+The skill sets a baseline in the host config and verifies it on the response: `Content-Security-Policy` from `default-src 'self'`, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` and `frame-ancestors 'none'`. Third-party scripts get SRI and `crossorigin`; analytics and marketing wait for consent.
+
+[`references/security-headers.md`](create-frontend/references/security-headers.md) has a report-only rollout, Next.js and Astro sketches, and copy-paste configs for Vercel, Netlify, Cloudflare and GitHub Pages. GitHub Pages cannot set custom response headers; the skill states that instead of claiming a policy.
+
+## Observability and consent
+
+The default is no analytics and no third-party tracking. When observability is requested:
+
+- a top-level error boundary and one provider adapter, with PII scrubbed and source maps kept private
+- Web Vitals (LCP, INP, CLS, TTFB) sent to the project's RUM or analytics
+- a small typed event plan, named for what the user did
+- consent categories (necessary, analytics, marketing) default to denied, with reject as easy as accept and a privacy page
+
+[`references/observability.md`](create-frontend/references/observability.md) has the adapter, event map, consent sketch and network-panel verification. A banner that loads analytics before the choice is a bug.
+
+## Quality gates
+
+Budgets are written in the repository and fail CI, not discovered after launch:
+
+| Gate | Tool | Failure |
+|---|---|---|
+| LCP ≤ 2.5 s, CLS ≤ 0.1, accessibility ≥ 0.95 | Lighthouse CI | fail the job |
+| First-route JavaScript and CSS | `size-limit` or equivalent | fail the job |
+| Desktop/mobile/light/dark layouts | Playwright screenshot baselines | review the diff, fix or update deliberately |
+| Serious and critical a11y violations | `@axe-core/playwright` | fail the job |
+
+[`references/quality-gates.md`](create-frontend/references/quality-gates.md) has the configs, CI wiring, baseline-update rules and the failure policy. A gate that is always green because it was widened is not a gate.
+
 ## When backend work is required
 
 The skill is frontend-only but detects these triggers: authentication and sessions, roles and permissions, database persistence, server-side validation, private API or service-role keys, file uploads to storage, payments, email or SMS, server-side processing, scheduling or webhooks, and anything other users must see after a reload.
@@ -259,7 +320,8 @@ Existing project tools are preferred. Tests must be able to fail; render-only te
 | Tests | Existing and new tests | project `test`, `npx playwright test` |
 | Browser | Routes open, console and network clean, interactions and states work at desktop and mobile widths | dev server + browser tool or Playwright |
 | Visual | Screenshots at 375 and 1280 wide, read by the agent | `npx playwright screenshot …` |
-| Accessibility | Automated scan plus a keyboard walk | `npx @axe-core/cli <url>` + manual |
+| Accessibility | Automated scan plus a keyboard walk, WCAG 2.2 AA | `npx @axe-core/cli <url>` + manual |
+| Delivery | CI ran and passed, PR opened under the user's identity, preview/deployed URL smoke-checked, headers present, consent behaves | `gh pr checks`; `curl -sI`; browser |
 
 Each category is reported separately. If a tool is unavailable the report states exactly what was not verified and gives the command to run manually. Pre-existing failures are reported as pre-existing, never as fixed.
 
@@ -282,14 +344,16 @@ When blocked by missing credentials, an unavailable service or tool, or a decisi
 Every run ends with:
 
 ```
-PROJECT            framework, language, styling, theme, motion level, design direction, testing, build tool
+PROJECT            framework, language, styling, theme, motion level, design direction, testing, build tool, repository
 IMPLEMENTED        what was built
-VERIFIED           code, types, build, tests, browser, visual, accessibility — each with its result
+VERIFIED           code, types, build, tests, browser, visual, accessibility, delivery — each with its result
 NOT VERIFIED       what, why, and the manual command
 PRE-EXISTING ISSUES
 KNOWN LIMITATIONS  including anything mock or placeholder and how to replace it
 BACKEND DEPENDENCIES  each with its contract location
 ENVIRONMENT VARIABLES  name (public|private, build-time|runtime): purpose
+GIT                branch, commit, PR, CI, preview, deployed
+DELIVERY           security headers, analytics/consent, error reporting, privacy page
 DEPLOYMENT NOTES   build command, output, fallback, Node version, risks
 ```
 
@@ -307,7 +371,11 @@ Edit `create-frontend/SKILL.md` unless the table says otherwise:
 | Add or change a colour theme | `create-frontend/references/themes.md`; run `node create-frontend/scripts/check-contrast.js` on the new values until it exits 0 |
 | Your company's palette as the only theme | Replace the library with one theme derived from your brand and delete the project → theme table |
 | Folder layout | Step 5 |
-| Accessibility or browser-support standard | Step 2 defaults and step 7 |
+| Accessibility or browser-support standard | Step 2 defaults, step 7 and `create-frontend/references/accessibility.md` |
+| Security header policy or host snippets | Step 7 and `create-frontend/references/security-headers.md` |
+| Observability, analytics or consent defaults | Step 7 and `create-frontend/references/observability.md` |
+| CI, Pages or identity rules | Step 12, `create-frontend/references/github-delivery.md` and `create-frontend/assets/github/` |
+| Performance, bundle or visual-regression budgets | `create-frontend/references/quality-gates.md` |
 | A fixed hosting provider | Step 12 |
 | Report format | Step 13 |
 | When the skill triggers | The `description` line in the frontmatter |
@@ -323,7 +391,11 @@ Edit `create-frontend/SKILL.md` unless the table says otherwise:
 - Web frontends only; no native mobile or desktop apps.
 - Backend work is identified and contracted, not implemented.
 - Browser, visual and accessibility verification depend on a browser tool or Playwright being available in the session; without them those categories are reported as not verified.
-- Scaffold commands and tool invocations (`create-vite`, `create-next-app`, `create-astro`, `sv create`, Playwright, axe, Lighthouse) are current major-version syntax and will drift; the skill is told to read current docs when a command fails.
+- GitHub delivery needs the user's Git identity and a Git remote; CI and Pages need GitHub. Without `gh`, the skill pushes the branch and gives a pull-request URL instead of claiming a PR exists.
+- The CI and Pages templates are starting points. Every stack differs; the workflow is adjusted to the project's real scripts and output directory, never left as a workflow that passes because it ran nothing.
+- Security headers depend on the host. Static hosts such as GitHub Pages cannot set response headers; the skill reports that limitation instead of claiming a policy.
+- Consent defaults are a safe starting point, not legal advice. The user or their counsel confirms the jurisdiction, categories and retention.
+- Scaffold commands and tool invocations (`create-vite`, `create-next-app`, `create-astro`, `sv create`, Playwright, axe, Lighthouse CI) are current major-version syntax and will drift; the skill is told to read current docs when a command fails.
 - The skill reads `AGENTS.md`, `CLAUDE.md` and lint config for team constraints; constraints that live only in people's heads must be stated in the request.
 - Design judgement is bounded: the skill avoids the generic AI look and follows supplied references, but does not replace a designer.
 - The themes are starting palettes with verified contrast, not brand systems. A theme derived from a brand colour is only as accessible as the adjusted colour; the checker reports it, the skill must act on it.
@@ -333,7 +405,15 @@ Edit `create-frontend/SKILL.md` unless the table says otherwise:
 
 Be aware of this before relying on the skill.
 
-**Tested projects:** none. The skill has not yet driven a build on a real project.
+**Tested projects:** one demo site (`examples/demo-site`). The skill has not yet driven a build on a framework project or a messy existing repository.
+
+**Verification performed on 4.0.0 (27 Oct 2026):**
+
+- `node .github/scripts/validate-skill.js` checks the frontmatter, every theme, the appendix, relative links, the CHANGELOG entry, the new reference files, the two workflow templates, and that `verify.sh` is executable and parses under `sh -n`
+- The generated-project workflows are parsed as YAML in CI with the system Ruby, so a broken template fails before a user copies it
+- `scripts/verify.sh` was run locally against `examples/demo-site` (no lint/type/build scripts; its 14 Playwright smoke tests pass) and CI runs it against a temporary project with passing and failing scripts; undefined checks are reported as `not defined`, not as passed
+- The identity rules are enforced by the CI check that pull-request commits contain no bot author or `Co-Authored-By` trailer; the skill's delivery reference tells the agent to check the same before pushing
+- Not yet done: running the GitHub delivery path end to end from a generated project (branch, PR, CI, Pages), a Lighthouse CI run against a real product, and a consent implementation reviewed by counsel. These are reported as unvalidated, not claimed.
 
 **Verification performed on 3.1.0 (6 Oct 2026):**
 
@@ -378,11 +458,11 @@ Three GitHub Actions workflows keep the repo honest:
 
 | Workflow | Runs | Checks |
 |---|---|---|
-| [CI](.github/workflows/ci.yml) | every push and pull request, Node 18 and 22 | `SKILL.md` frontmatter follows the Agent Skills spec; every theme passes `check-contrast.js`; the appendix in `SKILL.md` matches `references/themes.md` value for value; theme tables and relative links resolve; `CHANGELOG.md` has the current version; shell scripts pass shellcheck; `scaffold.sh html` and `install.sh` (symlink, copy, project, refusal) behave |
+| [CI](.github/workflows/ci.yml) | every push and pull request, Node 18 and 22 | `SKILL.md` frontmatter follows the Agent Skills spec; every theme passes `check-contrast.js`; the appendix in `SKILL.md` matches `references/themes.md` value for value; theme tables and relative links resolve; every required reference, asset and script exists; the GitHub workflow templates parse as YAML; `verify.sh` is executable and passes `sh -n`; `CHANGELOG.md` has the current version; shell scripts pass shellcheck; `scaffold.sh html` and `install.sh` (symlink, copy, project, refusal) behave; on pull requests, no commit in the branch has a bot author or `Co-Authored-By` trailer |
 | [Release](.github/workflows/release.yml) | on a `v*` tag | tag equals `metadata.version`, then publishes a release with `create-frontend/` zipped and the matching CHANGELOG section as notes |
 | [Scaffold drift](.github/workflows/scaffold-drift.yml) | monthly and on demand | runs `scaffold.sh` for Vite + React, Next.js, Astro, Vue and Svelte with network access and builds each result, so flag drift shows up as a red badge rather than a broken session |
 
-Run the CI checks locally with `node .github/scripts/validate-skill.js`. To cut a release: bump `metadata.version` in `SKILL.md`, add the CHANGELOG entry, then `git tag v3.1.0 && git push --tags`.
+Run the CI checks locally with `node .github/scripts/validate-skill.js`. To cut a release: bump `metadata.version` in `SKILL.md`, add the CHANGELOG entry, then `git tag v4.0.0 && git push --tags`.
 
 Editing a theme: change the values in `references/themes.md`, run the checker on them, and update the matching appendix rows in `SKILL.md`; CI fails if the two disagree.
 

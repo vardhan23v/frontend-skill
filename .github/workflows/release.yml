@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v3.1.0 (matching metadata.version in SKILL.md) to publish a GitHub release
+# Push a tag like v4.0.0 (matching metadata.version in SKILL.md) to publish a GitHub release
 # with the skill folder zipped and the matching CHANGELOG section as the notes.
 on:
   push:
@@ -35,8 +35,8 @@ jobs:
       - name: Package the skill folder
         run: |
           set -eu
-          zip -r "create-frontend-skill-v${{ steps.version.outputs.version }}.zip" create-frontend LICENSE -x '*.DS_Store'
-          unzip -l "create-frontend-skill-v${{ steps.version.outputs.version }}.zip"
+          zip -r "create-frontend-v${{ steps.version.outputs.version }}.zip" create-frontend LICENSE -x '*.DS_Store'
+          unzip -l "create-frontend-v${{ steps.version.outputs.version }}.zip"
 
       - name: Release notes from CHANGELOG
         run: |
@@ -57,6 +57,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "create-frontend-skill-v${{ steps.version.outputs.version }}.zip" \
+            "create-frontend-v${{ steps.version.outputs.version }}.zip" \
             --title "create-frontend ${{ steps.version.outputs.version }}" \
             --notes-file notes.md

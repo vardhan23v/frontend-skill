@@ -1,11 +1,11 @@
 ---
 name: "create-frontend"
-description: "Use when asked to create, scaffold, build, extend or fix a frontend (website, landing page, dashboard, web app UI, a page or component) in a new, existing or partially built code project. Classifies the project, decides the stack by priority, draws the frontend/backend boundary, composes a distinct design direction per project (theme from a contrast-checked library or derived from the brand, hero archetype, navigation, rhythm, type voice, imagery, motion level; never the same twice in a workspace), builds (including motion, 3D and icons when wanted), verifies in seven explicit categories and prepares deploy."
+description: "Use when asked to create, scaffold, build, extend or fix a frontend (website, landing page, dashboard, web app UI, a page or component) in a new, existing or partially built code project. Classifies the project, decides the stack by priority, draws the frontend/backend boundary, composes a distinct design direction per project (theme from a contrast-checked library or derived from the brand, hero archetype, navigation, rhythm, type voice, imagery, motion level; never the same twice in a workspace), builds (including motion, 3D and icons when wanted), verifies in eight explicit categories (code, types, build, tests, browser, visual, accessibility, delivery), ships to GitHub with branch/PR/CI/Pages when asked, applies security headers, observability and consent, and prepares deploy."
 license: "MIT"
-compatibility: "Any Agent Skills client. scripts/ need Node 18+ and a POSIX shell; browser, visual and accessibility checks need a browser tool or Playwright."
+compatibility: "Any Agent Skills client. scripts/ need Node 18+ and a POSIX shell; GitHub delivery needs the user's Git identity and optionally the GitHub CLI; browser, visual and accessibility checks need a browser tool or Playwright."
 metadata:
-  version: "3.3.0"
-  homepage: "https://github.com/vardhan23v/create-frontend-skill"
+  version: "4.0.0"
+  homepage: "https://github.com/vardhan23v/frontend-skill"
 ---
 
 # Create Frontend
@@ -34,7 +34,9 @@ Then size the task so you run only the steps it needs:
 | Single component or small change | 1 (conventions only), 7, 10 (code, types, build, browser), 13 |
 | Fix or restyle | 1, the fix, 10, 13 |
 
-For a new project, or a feature over about three screens, write a short plan first: stack and reason, pages, components, data sources, backend dependencies, order of work. Track it as a task list. Keep going unless a choice is expensive to undo and unclear, in which case ask.
+When the request includes GitHub, CI, a pull request or a deployment, step 12 is in scope even for a feature or a small change.
+
+For a new project, or a feature over about three screens, write a short plan first: stack and reason, pages, components, data sources, backend dependencies, delivery target, order of work. Track it as a task list. Keep going unless a choice is expensive to undo and unclear, in which case ask.
 
 ## 1. Read the project
 
@@ -49,6 +51,8 @@ Existing conventions win over this skill's defaults unless the user asks for a c
 - Components: naming, folder layout, import aliases, patterns for props, state and data
 - Data: existing API client, response types, mocks; `.env.example` and which variables are public
 - Tests: framework, location, how they run, whether they pass now
+- Delivery: Git remote and default branch, existing workflows in `.github/workflows/`, branch protection, `gh auth status` if installed, and the commit name/email (`git config --get user.name`, `git config --get user.email`). Never default the identity to a bot.
+- Security and observability: existing security headers and CSP, error tracking, analytics, consent handling, and whether a privacy page exists
 - Framework idioms: Vue/Nuxt, Svelte/SvelteKit, Angular and Solid projects keep their own idioms. Never introduce React into them.
 
 Run the existing `install`, `typecheck`, `lint`, `test` and `build` once before changing anything and record what already fails. You are not responsible for pre-existing failures, but you must not make them worse, and the report lists them.
@@ -64,13 +68,16 @@ Infer what is safe to infer. Ask one short batch of questions only for items tha
 | Data and APIs | The existing API; otherwise a labelled mock behind a contract (step 4) | No API exists and the data model is unclear |
 | Auth and roles | None for public sites; the existing auth for apps | Login or roles are needed and no provider exists |
 | Responsive and browser support | Mobile first; current evergreen browsers | Legacy browsers, kiosk or tablet-only use |
-| Accessibility | WCAG 2.1 AA basics (step 7) | A stricter or audited standard is required |
+| Accessibility | WCAG 2.2 AA (step 7, `references/accessibility.md`) | A stricter or audited standard is required |
 | SEO | Public site: yes; private app or dashboard: no | Unclear whether it is public |
-| Performance | Core Web Vitals targets (step 8) | Unusual constraints (slow networks, very large data) |
+| Performance | Core Web Vitals targets and the quality gates in step 8 | Unusual constraints (slow networks, very large data) |
 | Loading, error, empty, success states | Always, on every async view | - |
 | Design references and colour | Use what is supplied; otherwise a named theme from step 6, chosen by project type | Brand matters and nothing is supplied |
 | Motion and 3D | The motion level the theme defaults to, usually `functional` (step 7, `references/motion.md`); no 3D | The user asks for more or less motion, or a reference relies on it |
 | Favicon and app icons | Always; from the user's logo or an original mark (step 7) | - |
+| Security headers | Baseline set in step 7 and verified in step 10 | The host cannot set headers, or a required integration would break |
+| Analytics and consent | None; when requested, consent-gated with no PII (step 7, `references/observability.md`) | A legal, contractual or audited standard applies |
+| GitHub delivery and CI | No commit, push or PR unless asked; when asked: branch, PR, CI and the user's identity, never a bot (step 12) | A direct push, merge, tag or deploy is requested |
 | Deploy target, environment variables, integrations | Record what is known | A host or integration forces a framework choice |
 
 ## 3. Decide the stack
@@ -100,6 +107,9 @@ An existing stack is preserved unless the user asks for a migration. For a new p
 | Icons | Keep | One icon set, imported per icon (for example `lucide-react`) | - |
 | Animation | Keep | CSS transitions and keyframes | Orchestration, gestures or layout animation: `motion` in React, GSAP for timelines; designer-made vector animation: dotLottie |
 | 3D | Keep | None | 3D is the content or the user asks: `<model-viewer>` for a model, `three` + `@react-three/fiber` for a scene (step 7) |
+| CI | Keep the existing workflow | GitHub Actions from `assets/github/ci.yml` when the project is on GitHub; the host's CI otherwise | The team uses GitLab, Bitbucket or another runner |
+| Error tracking | Keep the existing provider | None; a small adapter with a no-op when no provider is configured | The user names Sentry, GlitchTip or another service |
+| Analytics and consent | Keep the existing setup | None; when requested, a consent-gated analytics module with a short event plan | A legal or contractual standard requires a specific vendor |
 | Build tooling | Keep | The framework's own (Vite, Next, Astro) | - |
 
 Scaffold: `scripts/scaffold.sh <vite-react|next|astro|vue|svelte|html> <name>`, next to this file, runs the official scaffolders non-interactively with current flags. Without it: `npm create vite@latest <name> -- --template react-ts --no-interactive`, `npx create-next-app@latest <name> --yes`, `npm create astro@latest`, `npm create vue@latest`, `npx sv create`. These change between major versions: if the script or a command fails or prompts unexpectedly, read the tool's current docs rather than guessing flags, and prefer non-interactive flags. With Vite + Tailwind: `npm install tailwindcss @tailwindcss/vite`, add the plugin to `vite.config.ts`, put `@import "tailwindcss";` in the main CSS.
@@ -134,6 +144,15 @@ src/
   styles/       global CSS and design tokens
   assets/       images, fonts
   mocks/        mock data, clearly named as mock
+```
+
+Delivery files live at the project root and are part of the build:
+
+```
+.github/workflows/ci.yml      copy from assets/github/ci.yml and adjust to the stack
+.github/workflows/pages.yml   only for a static GitHub Pages deploy
+docs/design.md                the chosen design direction and its reasons
+docs/api-contract.md          when there is a backend dependency
 ```
 
 Keep components small and single-purpose. Co-locate a component's styles and tests with it. No dead code, commented-out blocks or leftover scaffold boilerplate (remove the default demo page, logos and counter). Do not create abstractions or components for a single use.
@@ -206,15 +225,18 @@ Mobile first. Design for about 375 px, 768 px and 1280 px, not one viewport. Che
 
 ### Accessibility
 
-Native semantics first; ARIA only when a native element cannot express the role or state.
+Native semantics first; ARIA only when a native element cannot express the role or state. The standard is **WCAG 2.2 AA**; `references/accessibility.md` has the full checklist, component notes and the 2.2 additions.
 
 - Semantic HTML: `button` for actions, `a` for navigation, `nav`, `main`, `header`, `label`; one `h1` per page, headings in order
 - Keyboard: everything reachable and operable in a logical order; visible focus; Escape closes dialogs and menus; arrow keys in menus, tabs and listboxes
+- Focus not obscured: a sticky header, cookie banner or chat widget never covers the focused element; test with Tab, not a mouse
 - Dialogs: focus moves in on open, is trapped while open, and returns to the trigger on close
-- Forms: inputs tied to labels; errors in text, linked with `aria-describedby`, announced on submit
+- Forms: inputs tied to labels; errors in text, linked with `aria-describedby`, announced on submit; allow paste and password managers; do not ask for the same information twice
 - Images: alt text on meaningful images, empty `alt` on decorative ones
 - Contrast at least 4.5:1 for body text, 3:1 for large text and UI controls; meaning never by colour alone
-- Text scales to 200% zoom without clipping; motion honours `prefers-reduced-motion`; `lang` set on `<html>`
+- Target size: pointer targets at least 24×24 px, touch targets 44×44 px; any drag-only interaction has a single-pointer alternative
+- Help: a help mechanism (chat, phone, FAQ) appears in the same relative order on every page where it exists
+- Text scales to 200% and reflows at 400% / 320 px without clipping; motion honours `prefers-reduced-motion`; `lang` set on `<html>`
 
 ### Data and state
 
@@ -316,6 +338,29 @@ No hard-coded user-facing strings; the framework's i18n library and message file
 - Run the package manager's audit after adding dependencies; report high-severity findings; do not auto-apply breaking fixes
 - Frontend validation and hidden UI are never security controls
 
+### Security headers
+
+A page that runs is not the same as a page that cannot be framed, sniffed or injected. Set the baseline in the host's header configuration (or Next.js `headers()` / middleware), never only in a comment:
+
+- `Content-Security-Policy` starting from `default-src 'self'`, allowing only the origins the page uses; nonce or hash for inline scripts, never `unsafe-eval`
+- `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'`
+- `integrity` and `crossorigin` on third-party scripts and styles; no analytics or marketing tag before consent
+- GitHub Pages cannot set response headers; do not claim CSP or HSTS there without a CDN or proxy
+
+`references/security-headers.md` has the baseline, a report-only rollout, Next.js and Astro sketches, and host snippets for Vercel, Netlify, Cloudflare and GitHub Pages. Verify with `curl -sI` and the browser console; a policy that breaks the page is a bug, not a win.
+
+### Observability, analytics and consent
+
+The default is no analytics and no third-party tracking. When the user asks for observability:
+
+- Keep the top-level error boundary, report through one provider adapter, scrub PII, and keep source maps private
+- Send Web Vitals (LCP, INP, CLS, TTFB) to the project's analytics or RUM; targets are in step 8
+- Write a short typed event plan before adding a tag manager; name events for what the user did, not the widget that was clicked
+- Consent categories are necessary, analytics and marketing, default denied. Do not load analytics or marketing before a choice; provide reject as easily as accept, and a privacy page
+- Never put emails, names, tokens or full form values in an event
+
+`references/observability.md` has the adapter, Web Vitals, event-map, consent and verification patterns. Verify in the network panel with consent denied and accepted; code that compiles is not evidence.
+
 ## 8. Performance
 
 Targets on a mid-range phone: Largest Contentful Paint at or under 2.5 s, Interaction to Next Paint at or under 200 ms, Cumulative Layout Shift at or under 0.1. Measure before optimising; fix the largest cost first.
@@ -326,6 +371,8 @@ Targets on a mid-range phone: Largest Contentful Paint at or under 2.5 s, Intera
 - Rendering: avoid re-renders from unstable props and context that changes on every render; no API requests in loops or on every keystroke without debouncing
 - Loading: no render-blocking scripts or stylesheets that are not needed for the first paint; avoid layout shift from late fonts, images and banners
 - Motion and 3D: compositor-only properties; animation and 3D libraries, models and Lottie files lazy-loaded off the critical path and within the budgets in step 7
+- Budgets: write the numbers in the repository and make them fail CI — Lighthouse CI for LCP, CLS and accessibility, a bundle-size gate for the first route, and a visual regression gate for the layouts people see. `references/quality-gates.md` has the configs and failure policy.
+- Measure before optimising and after the fix; report the numbers, not the intention. A budget that lives only in a chat message is not a gate.
 
 ## 9. Tests
 
@@ -337,19 +384,24 @@ Prefer the project's existing tools. For a new project use the stack chosen in s
 | Component | Forms, interactive components, important UI states (loading, error, empty) | Static presentational components |
 | End-to-end | Critical journeys: sign-in, checkout or payment, the main create/edit flow, primary navigation; a smoke test that each main page loads without console errors | Everything else |
 
+- Add Playwright screenshot baselines for the pages people see at desktop and mobile, plus dark mode when both ship. Review the diff before updating a baseline; never update one just to make a red run green.
+- Add axe to the end-to-end suite (`@axe-core/playwright`) and fail on serious or critical violations; it complements the keyboard walk, it does not replace it.
+- Run the same tests in CI. A test that only runs on the author's machine is a suggestion. `references/quality-gates.md` has the configs and CI wiring.
+
 ## 10. Verify
 
-Seven categories. Run what you can, fix what you find, and report each one honestly. If a tool or command is unavailable: say exactly what was not verified, do not fabricate a result, and give the command the user can run.
+Eight categories. Run what you can, fix what you find, and report each one honestly. If a tool or command is unavailable: say exactly what was not verified, do not fabricate a result, and give the command the user can run.
 
 | Category | What it covers | Typical command |
 |---|---|---|
-| Code | Lint and format pass; no dead code, debug output, TODOs presented as done, or secrets in the diff | project `lint`; review `git diff` |
+| Code | Lint and format pass; no dead code, debug output, TODOs presented as done, or secrets in the diff | project `lint`; the skill's `scripts/verify.sh`; review `git diff` |
 | Types | Typecheck passes | `tsc --noEmit` or the project script |
 | Build | Production build succeeds; bundle sizes reviewed | `npm run build` (or the manager's equivalent) |
 | Tests | Existing and new tests pass | project `test`; `npx playwright test` |
 | Browser | App runs; routes open; console and network clean; interactions, states, forms and navigation work at desktop and mobile widths | dev or preview server plus a browser tool or Playwright |
 | Visual | Screenshots at 375 and 1280 wide (light and dark if both ship) read by you: layout, spacing and typography consistent; nothing clipped or overflowing; animations and 3D settle as intended, honour reduced motion and show their poster until loaded; the tab icon renders | `npx playwright screenshot --viewport-size=375,812 <url> mobile.png` |
-| Accessibility | Automated scan plus a keyboard walk | `npx @axe-core/cli <url>` plus manual checks below |
+| Accessibility | Automated scan plus a keyboard walk, WCAG 2.2 AA | `npx @axe-core/cli <url>` plus the checks in `references/accessibility.md` |
+| Delivery | CI ran and passed; PR opened under the user's identity; preview or deployed URL smoke-checked; security headers present; consent behaves | `gh pr checks`; `curl -sI`; browser on the deployed URL |
 
 Optional for public sites: `npx lighthouse <url> --only-categories=performance,accessibility,best-practices,seo`; report the scores and fix clear failures.
 
@@ -369,7 +421,19 @@ followed by manual steps the user can run: the command to start the app, the URL
 
 ### Accessibility verification
 
-Semantic HTML existing in the code is not verification. When a browser is available: tab through every page (order logical, focus visible, no traps); Enter and Space activate buttons, Enter activates links; Escape closes dialogs and focus returns to the trigger; arrow keys move within menus and tabs; forms announce labels and errors; zoom to 200% without clipping; reduced motion honoured (emulate `prefers-reduced-motion: reduce` and confirm nothing travels); touch targets checked; contrast checked twice, the tokens with `scripts/check-contrast.js` and the rendered pages with axe. Run the axe scan and fix serious and critical issues. When no browser is available, report the review as code-level only.
+Semantic HTML existing in the code is not verification. When a browser is available: tab through every page (order logical, focus visible, no traps, sticky elements do not cover focus); Enter and Space activate buttons, Enter activates links; Escape closes dialogs and focus returns to the trigger; arrow keys move within menus and tabs; forms announce labels and errors; allow paste and password managers; check 24 px pointer targets and 44 px touch targets; test any drag interaction with a single pointer; zoom to 200% and reflow at 400% / 320 px without clipping; reduced motion honoured (emulate `prefers-reduced-motion: reduce` and confirm nothing travels); contrast checked twice, the tokens with `scripts/check-contrast.js` and the rendered pages with axe. Run the axe scan and fix serious and critical issues. When no browser is available, report the review as code-level only. `references/accessibility.md` has the 2.2 criteria and component checks.
+
+### Delivery verification
+
+When the user asked for GitHub, CI or a deployment:
+
+- Run the skill's `scripts/verify.sh --install` against the project (`sh <skill>/scripts/verify.sh --install <project-dir>`) and report each line. It runs the project's own lint, format, types, tests, build and Playwright scripts and skips what is not defined.
+- Open the PR and wait for CI: `gh pr checks --watch` or `gh run watch`. A green check means the workflow ran; no workflow means "CI not configured", not "passed".
+- Read the headers from the deployed or preview response with `curl -sI`; confirm the CSP does not break the console and that HSTS is not set on localhost. GitHub Pages cannot set custom headers; say so.
+- With consent denied, confirm no analytics or marketing request fires; with consent accepted, confirm the event fires once.
+- Open the deployed URL, a deep link and a missing path. Check assets, console, network and the base path.
+- Confirm the commits are authored by the user and have no bot trailer: `git log --format='%an <%ae>%n%b' origin/main..HEAD`.
+- If any of this was not run, write `not run` with the command. Never claim a CI run, preview or deployment that does not exist.
 
 Stop any server you started. Delete screenshots and temporary files unless the user wants them.
 
@@ -387,13 +451,34 @@ When blocked by missing credentials, an unavailable service or tool, or a decisi
 | Works in dev, blank page in production | Wrong `base` path, missing SPA fallback, or an env variable unset at build time |
 | Hydration mismatch warnings | Server and client render differently (dates, random values, `window` access) |
 | API calls blocked in the browser | CORS on the API, or a mixed http/https request; fix on the server or use a dev proxy |
-| Deep links 404 after deploy | SPA fallback not configured on the host |
-| Tests pass locally, fail in CI | Timezone, locale, missing env variable, or a timing-dependent test |
+| Deep links 404 after deploy | SPA fallback not configured on the host; on GitHub Pages, copy `index.html` to `404.html` |
+| Tests pass locally, fail in CI | Timezone, locale, missing env variable, or a timing-dependent test; reproduce with `npm ci` and the CI Node version |
 | 3D canvas blank or "WebGL context lost" | No GPU in a headless browser, too many contexts, or a disposed scene; test in a real browser and keep the poster fallback |
+| `gh: not logged in` or wrong account | The GitHub CLI session is missing or belongs to someone else; ask the user to authenticate, never use another token |
+| Push rejected by a protected branch | Direct push to `main`; push the feature branch and open a PR, do not disable protection |
+| CI cannot find a script or lockfile | The workflow assumes npm while the project uses pnpm, yarn or bun, or the lockfile is not committed; match the package manager and commit the lockfile |
+| Pages loads without CSS/JS or 404s on deep links | Wrong base path or missing SPA fallback; set the base for a project page and rebuild |
+| CSP blocks a script, font or API call | An origin is missing from `script-src`, `font-src` or `connect-src`; add the exact origin, never `*` or `unsafe-eval` |
+| Analytics fires before consent | The tag is loaded at module top level; load it only after the consent decision |
+| Visual test fails on every run | Fonts, animations or device scale differ; wait for fonts, disable animations, then update the baseline deliberately |
 
-## 12. Prepare for deploy
+## 12. Prepare for delivery and deploy
 
-Deployment is optional. Always record what the host needs; deploy only when the user explicitly asks.
+Delivery is optional. Always record what the host needs; commit, push, open a pull request or deploy only when the user explicitly asks. When you do, the identity rule is not optional: the commit author and committer are the user, never a bot.
+
+### GitHub delivery
+
+1. **Preflight.** Check `git status --short`, `git remote -v`, the default branch, `gh auth status` and `gh api user --jq .login`. Confirm `git config user.name` and `git config user.email`. If either is missing or belongs to someone else, stop and ask. Never install or authenticate `gh` silently, and never use another account.
+2. **Branch.** `git switch -c feat/<slug> origin/main`. Use `fix/`, `refactor/`, `chore/` or `docs/` for the other change types.
+3. **Commit.** Stage only the intended files; run `git diff --cached`, `git diff --check` and a secret scan. The message is imperative and explains why. No `Co-Authored-By` bot trailer and no "generated by" footer. Check before pushing: `git log --format='%an <%ae>%n%b' origin/main..HEAD`.
+4. **Push and PR.** `git push -u origin feat/<slug>`, then `gh pr create --base main --head feat/<slug> --title ... --body-file ...`. The PR body carries the summary, the eight verification categories, screenshots, backend/environment notes, risks and rollback. Do not merge unless asked.
+5. **CI.** Copy `assets/github/ci.yml` to `.github/workflows/ci.yml`, adjust the output paths and package manager, and commit it with the feature. Wait for the checks (`gh pr checks --watch`); read the failed log and fix the cause. Never disable a check or weaken an assertion to get green.
+6. **Pages.** Static only. Copy `assets/github/pages.yml`, set the framework base path for a project page (`/<repo>/`), and keep the `404.html` fallback. In the repository: Settings → Pages → Source: GitHub Actions. Next.js SSR and API routes need a Node host, not Pages. GitHub Pages cannot set security headers; state that limitation.
+7. **Merge, tag, deploy.** Only when asked. Merge with the repository's convention, delete the branch, and tag `v<version>` only when the version matches. Smoke-check the deployed URL, a deep link and a missing path.
+
+`references/github-delivery.md` has the exact commands, the PR body template, the identity checks, the Pages rules and the failure table.
+
+### Host deployment
 
 | Stack | Build command | Output | Framework-specific |
 |---|---|---|---|
@@ -402,12 +487,13 @@ Deployment is optional. Always record what the host needs; deploy only when the 
 | Astro | `npm run build` | `dist` | SSR needs the host's adapter; static needs none |
 | Next.js | `npm run build` | `.next` via the host adapter; static export uses `out` | Needs a Node host or adapter unless statically exported; image optimisation needs a loader on static hosts |
 
-- SPA fallback: serve `index.html` for unknown routes (`_redirects` with `/* /index.html 200` on Netlify and Cloudflare Pages, a rewrite in `vercel.json`, or the host's equivalent)
+- SPA fallback: serve `index.html` for unknown routes (`_redirects` with `/* /index.html 200` on Netlify and Cloudflare Pages, a rewrite in `vercel.json`, or the host's equivalent). On GitHub Pages, copy `index.html` to `404.html`.
 - List every environment variable, marked public or private, and which are needed at build time
 - State the Node version the build needs
-- Common risks: env variables set at runtime but needed at build; wrong output directory; missing fallback; free plans that sleep or restrict commercial use (tell the user to check the plan's current terms rather than asserting them); secrets in the repo
+- Add the security headers from `references/security-headers.md` to the host config and verify them on the deployed response
+- Common risks: env variables set at runtime but needed at build; wrong output directory; missing fallback; free plans that sleep or restrict commercial use (tell the user to check the plan's current terms rather than asserting them); secrets in the repo; a CSP that blocks the API, fonts or analytics
 - Update the project README with run, build and deploy instructions
-- No commits, pushes, hosting projects or deploys unless asked. If asked and the tooling is present: build locally first, confirm env variables are set on the host, deploy to a preview or staging target if the host has one, smoke-check the deployed URL, then promote.
+- No commits, pushes, hosting projects or deploys unless asked. If asked and the tooling is present: build locally first, run the skill's `scripts/verify.sh --install`, confirm env variables are set on the host, deploy to a preview or staging target if the host has one, smoke-check the deployed URL and headers, then promote.
 
 ## 13. Verification report
 
@@ -423,6 +509,7 @@ Motion: (minimal | functional | expressive, and which recipes were used)
 Design: (direction chosen: hero, nav, rhythm, cards, buttons, type, imagery; the two alternatives offered; path of docs/design.md)
 Testing:
 Build tool:
+Repository: (remote and default branch, or "not a Git repository")
 
 IMPLEMENTED
 - ...
@@ -435,6 +522,7 @@ VERIFIED
 - Browser:
 - Visual:
 - Accessibility:
+- Delivery:
 
 NOT VERIFIED
 - ... (what, why, and the command to run manually)
@@ -451,6 +539,20 @@ BACKEND DEPENDENCIES
 ENVIRONMENT VARIABLES
 - NAME (public|private, build-time|runtime): purpose
 
+GIT
+- Branch:
+- Commit:
+- PR:
+- CI: (workflow and result, or "not configured")
+- Preview:
+- Deployed:
+
+DELIVERY
+- Security headers:
+- Analytics and consent:
+- Error reporting:
+- Privacy page:
+
 DEPLOYMENT NOTES
 - build command, output directory, fallback, Node version, risks
 ```
@@ -461,12 +563,15 @@ DEPLOYMENT NOTES
 - [ ] Colour theme named (existing tokens, derived from brand, or one from the library); contrast checked in every shipped mode
 - [ ] Design direction composed and written to `docs/design.md`, with reasons, two alternatives offered, and no repeat of a previous direction in the workspace
 - [ ] Motion level named; every animation uses the tokens and honours reduced motion (checked in the browser, not assumed)
-- [ ] Code, types, build and tests pass (pre-existing failures reported, not hidden)
-- [ ] Browser, visual and accessibility checks run, or reported as not available with manual steps
+- [ ] Code, types, build and tests pass (pre-existing failures reported, not hidden); the skill's `scripts/verify.sh` run or its gaps reported
+- [ ] Browser, visual and accessibility checks run to WCAG 2.2 AA, or reported as not available with manual steps
+- [ ] Security headers set and verified on the response, or the host limitation stated (GitHub Pages cannot set them)
+- [ ] Error boundary present; analytics and consent configured or explicitly not needed; no PII in events
 - [ ] Loading, empty, error and success states exist on every async view
 - [ ] Backend dependencies named, with contracts; nothing faked as working
 - [ ] No secrets in client code; `.env*` ignored; `.env.example` present
 - [ ] No scaffold boilerplate (including the default favicon), dead code or unlabelled mock data
+- [ ] CI workflow added and green; PR opened under the user's identity with no bot trailer, or delivery reported as not requested or not available
 - [ ] README and deploy settings current; verification report produced
 
 ## Rules
@@ -477,7 +582,9 @@ DEPLOYMENT NOTES
 - Do not fake backend behaviour; do not present mocks as real
 - No secrets in client code, ever
 - No commits, pushes or deploys unless asked
-- Never claim a verification you did not run
+- When asked to commit or open a PR: the author and committer are the user, never a bot; no `Co-Authored-By` bot trailer, no force-push to a shared branch, no direct push to `main`, no merge unless asked
+- No analytics or marketing request before consent; no PII in events
+- Never claim a CI run, deployment or header check you did not run
 - A frontend that has not been built and run is not finished
 
 ## Appendix: theme tokens (single-file fallback)

@@ -1,0 +1,144 @@
+# Copy to .github/workflows/ci.yml in the frontend project.
+#
+# Starting point, not a universal workflow. It detects npm, pnpm, yarn and bun from the lockfile,
+# runs only the scripts the project defines, and uploads Playwright artifacts.
+# Delete or add steps to match the project; never replace a real check with a no-op.
+#
+# Identity: this workflow runs checks only. It does not commit. If a later step must commit
+# (visual baselines, generated docs), use the repository owner's identity and ask first.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint, types, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version
+        id: node
+        run: |
+          if [ -f .nvmrc ]; then
+            echo "version=$(tr -d '[:space:]' < .nvmrc)" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=22" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "name=pnpm" >> "$GITHUB_OUTPUT"
+            echo "cache=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+            echo "run=pnpm run" >> "$GITHUB_OUTPUT"
+            echo "exec=pnpm exec" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "name=yarn" >> "$GITHUB_OUTPUT"
+            echo "cache=yarn" >> "$GITHUB_OUTPUT"
+            echo "install=yarn install --immutable" >> "$GITHUB_OUTPUT"
+            echo "run=yarn run" >> "$GITHUB_OUTPUT"
+            echo "exec=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f bun.lock ] || [ -f bun.lockb ]; then
+            echo "name=bun" >> "$GITHUB_OUTPUT"
+            # actions/setup-node does not cache bun; setup-bun below handles the runtime.
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "install=bun install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+            echo "run=bun run" >> "$GITHUB_OUTPUT"
+            echo "exec=bunx" >> "$GITHUB_OUTPUT"
+          elif [ -f package-lock.json ]; then
+            echo "name=npm" >> "$GITHUB_OUTPUT"
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+            echo "install=npm ci" >> "$GITHUB_OUTPUT"
+            echo "run=npm run" >> "$GITHUB_OUTPUT"
+            echo "exec=npx" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lockfile found. Commit package-lock.json, pnpm-lock.yaml, yarn.lock or bun.lock." >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: ${{ steps.pm.outputs.cache }}
+
+      - name: Enable corepack
+        if: steps.pm.outputs.name == 'pnpm' || steps.pm.outputs.name == 'yarn'
+        run: corepack enable
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.pm.outputs.name == 'bun'
+
+      - name: Detect scripts
+        id: scripts
+        run: |
+          node - <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const scripts = pkg.scripts || {};
+          const checks = { lint: 'lint', format: 'format:check', typecheck: 'typecheck', test: 'test', build: 'build' };
+          for (const [key, name] of Object.entries(checks)) {
+            console.log(`${key}=${scripts[name] ? 'true' : 'false'}`);
+          }
+          NODE
+
+      - name: Install
+        run: |
+          if [ "${{ steps.pm.outputs.name }}" = "yarn" ] && yarn --version | grep -q '^1\.'; then
+            yarn install --frozen-lockfile
+          else
+            ${{ steps.pm.outputs.install }}
+          fi
+
+      - name: Lint
+        if: steps.scripts.outputs.lint == 'true'
+        run: ${{ steps.pm.outputs.run }} lint
+
+      - name: Format check
+        if: steps.scripts.outputs.format == 'true'
+        run: ${{ steps.pm.outputs.run }} format:check
+
+      - name: Typecheck
+        if: steps.scripts.outputs.typecheck == 'true'
+        run: ${{ steps.pm.outputs.run }} typecheck
+
+      - name: Unit and component tests
+        if: steps.scripts.outputs.test == 'true'
+        run: ${{ steps.pm.outputs.run }} test
+
+      - name: Build
+        if: steps.scripts.outputs.build == 'true'
+        run: ${{ steps.pm.outputs.run }} build
+
+      - name: Install Playwright browsers
+        if: hashFiles('playwright.config.*') != ''
+        run: ${{ steps.pm.outputs.exec }} playwright install --with-deps chromium
+
+      - name: End-to-end and visual tests
+        if: hashFiles('playwright.config.*') != ''
+        run: ${{ steps.pm.outputs.exec }} playwright test
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            playwright-report/
+            test-results/
+            coverage/
+          if-no-files-found: ignore
+          retention-days: 7
